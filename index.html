@@ -14,7 +14,7 @@
     margin: 0;
     padding: 15px;
     font-family: Arial, sans-serif;
-    background: #ffffff;
+    background: #555555;
     color: #333333;
   }
 
@@ -27,8 +27,8 @@
   }
 
   .download-button {
-    background: #16784a;
-    color: white;
+    background: #555555;
+    color: gray;
     border: none;
     border-radius: 5px;
     padding: 13px 22px;
@@ -60,7 +60,7 @@
 <div class="container">
 
   <button id="descarregar" class="download-button">
-    ↓ Descarregar lista em Excel
+    ↓ CMG_Processos_Turismo.xlsx
   </button>
 
   <div id="estado">
@@ -303,7 +303,7 @@ async function descarregarExcel() {
 
     XLSX.writeFile(
       livro,
-      "Lista_Processos_Turismo.xlsx"
+      "CMG_Processos_Turismo.xlsx"
     );
 
     estado.textContent =
