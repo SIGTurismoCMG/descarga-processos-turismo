@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Descarregar dados de turismo</title>
+
+<!-- Biblioteca para criar ficheiros Excel -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+  body {
+    margin: 0;
+    padding: 15px;
+    font-family: Arial, sans-serif;
+    background: #ffffff;
+    color: #333333;
+  }
+
+  .container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  .download-button {
+    background: #16784a;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 13px 22px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  .download-button:hover {
+    background: #105c38;
+  }
+
+  .download-button:disabled {
+    background: #999999;
+    cursor: wait;
+  }
+
+  #estado {
+    font-size: 13px;
+    color: #555555;
+    text-align: center;
+    width: 100%;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <button id="descarregar" class="download-button">
+    ↓ Descarregar lista em Excel
+  </button>
+
+  <div id="estado">
+    Descarrega a lista completa de processos turísticos.
+  </div>
+
+</div>
+
+<script>
+
+// ============================================
+// 1. CONFIGURAÇÃO DO SERVIÇO
+// ============================================
+
+const LAYER_URL =
+"https://services9.arcgis.com/pqStQey58r31RySA/arcgis/rest/services/DSH_Proc_Tur_v2026/FeatureServer/0";
+
+// Número de registos por pedido
+const TAMANHO_LOTE = 500;
+
+// ============================================
+// 2. CAMPOS A EXPORTAR
+// ============================================
+
+// Nome técnico do campo e nome no Excel
+
+const CAMPOS = [
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_N_PROC_A",
+    titulo: "Número do processo"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_LOCAL_FR",
+    titulo: "Freguesia"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_CD_PRED",
+    titulo: "Prédio Rústico / Lote"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_PROC_A_T",
+    titulo: "Tipo de processo"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_PROC_A_I",
+    titulo: "Instrução do PIP"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_PROC_EST",
+    titulo: "Estado do processo"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_ET_TIPO",
+    titulo: "Tipologia do ET"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_ET_UA",
+    titulo: "Número de UA"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_ET_CAMAS",
+    titulo: "Número de camas"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_IN_ZEPT",
+    titulo: "Inserido na ZEPT"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_IN_ATP",
+    titulo: "Inserido em ATP"
+  },
+
+  {
+    nome: "LIGACAO_PROCESSOS_ARCGIS_25_11_2025_ATP_DES",
+    titulo: "Designação da ATP"
+  }
+
+];
+
+// ============================================
+// 3. ELEMENTOS DA INTERFACE
+// ============================================
+
+const botao = document.getElementById("descarregar");
+const estado = document.getElementById("estado");
+
+// ============================================
+// 4. FUNÇÃO DE CONSULTA À API REST
+// ============================================
+
+async function consultarArcGIS(parametros) {
+
+  const resposta = await fetch(LAYER_URL + "/query", {
+
+    method: "POST",
+
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+
+    body: new URLSearchParams(parametros)
+
+  });
+
+  if (!resposta.ok) {
+    throw new Error("Erro na comunicação com o ArcGIS.");
+  }
+
+  const dados = await resposta.json();
+
+  if (dados.error) {
+    throw new Error(dados.error.message);
+  }
+
+  return dados;
+
+}
+
+// ============================================
+// 5. FUNÇÃO PRINCIPAL DE EXPORTAÇÃO
+// ============================================
+
+async function descarregarExcel() {
+
+  botao.disabled = true;
+
+  try {
+
+    estado.textContent = "A consultar os registos...";
+
+    // Verificar se a biblioteca Excel está disponível
+
+    if (typeof XLSX === "undefined") {
+      throw new Error("Não foi possível carregar a biblioteca Excel.");
+    }
+
+    // Obter todos os identificadores
+
+    const resultadoIDs = await consultarArcGIS({
+
+      where: "1=1",
+
+      returnIdsOnly: "true",
+
+      f: "json"
+
+    });
+
+    const ids = resultadoIDs.objectIds || [];
+
+    if (ids.length === 0) {
+
+      estado.textContent = "Não existem registos disponíveis.";
+
+      return;
+
+    }
+
+    const linhasExcel = [];
+
+    // ========================================
+    // 6. CONSULTA POR LOTES
+    // ========================================
+
+    for (let i = 0; i < ids.length; i += TAMANHO_LOTE) {
+
+      const lote = ids.slice(i, i + TAMANHO_LOTE);
+
+      const campos = CAMPOS.map(c => c.nome).join(",");
+
+      const resultado = await consultarArcGIS({
+
+        objectIds: lote.join(","),
+
+        outFields: campos,
+
+        returnGeometry: "false",
+
+        f: "json"
+
+      });
+
+      const registos = resultado.features || [];
+
+      // Converter atributos para colunas Excel
+
+      registos.forEach(registo => {
+
+        const linha = {};
+
+        CAMPOS.forEach(campo => {
+
+          linha[campo.titulo] =
+            registo.attributes[campo.nome] ?? "";
+
+        });
+
+        linhasExcel.push(linha);
+
+      });
+
+      estado.textContent =
+        "A preparar Excel: " +
+        linhasExcel.length + " / " + ids.length;
+
+    }
+
+    // ========================================
+    // 7. CRIAR O FICHEIRO EXCEL
+    // ========================================
+
+    const folha = XLSX.utils.json_to_sheet(linhasExcel);
+
+    // Ajustar largura das colunas
+
+    folha["!cols"] = CAMPOS.map(campo => ({
+      wch: Math.max(campo.titulo.length + 3, 18)
+    }));
+
+    const livro = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(
+      livro,
+      folha,
+      "Processos de Turismo"
+    );
+
+    // Gerar e descarregar ficheiro
+
+    XLSX.writeFile(
+      livro,
+      "Lista_Processos_Turismo.xlsx"
+    );
+
+    estado.textContent =
+      "Concluído! Foram exportados " +
+      linhasExcel.length + " registos.";
+
+  } catch (erro) {
+
+    console.error(erro);
+
+    estado.textContent =
+      "Não foi possível descarregar os dados: " +
+      erro.message;
+
+  } finally {
+
+    botao.disabled = false;
+
+  }
+
+}
+
+// ============================================
+// 8. ASSOCIAR O BOTÃO À DESCARGA
+// ============================================
+
+botao.addEventListener("click", descarregarExcel);
+
+</script>
+
+</body>
+</html>
